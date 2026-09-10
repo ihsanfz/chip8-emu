@@ -1,6 +1,10 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
+
 #define SCREEN_WIDTH 64
 #define SCREEN_HEIGHT 32
 #define SCALE 10
