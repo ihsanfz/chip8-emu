@@ -6,4 +6,4 @@ find_package(SDL3 REQUIRED CONFIG)
 
 add_executable(chip8 src/chip8.c)
 
-target_link_libraries(chip8 PRIVATE SDL3::SDL3)
+target_link_libraries(chip8 PRIVATE SDL3::SDL3 m)

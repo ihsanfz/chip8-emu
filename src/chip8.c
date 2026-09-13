@@ -4,10 +4,13 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
 
 #define SCREEN_WIDTH 64
 #define SCREEN_HEIGHT 32
 #define SCALE 10
+#define SAMPLE_RATE 44100
+#define BEEP_FREQ 440
 
 
 typedef struct{
@@ -29,6 +32,7 @@ typedef struct{
 
 Chip8 chip8;
 
+SDL_AudioStream *audio_stream = NULL;
 
 uint8_t fontset[80] = {
     0xF0, 0x90, 0x90, 0x90, 0xF0,  // 0
@@ -82,11 +86,72 @@ int loadRom(const char *filename) {
     fclose(f);
     return 1;
 }
+/*
+void beeper(void){
+	
+	static int phase = 0;
+	const int samples = 512;
+	float buffer[samples];
+	
+	for(int i = 0; i < samples; i++){
+		buffer[i] = (phase < SAMPLE_RATE / (BEEP_FREQ * 2)) ? 0.25f : -0.25f;
+		phase++;
+		
+		if(phase >= SAMPLE_RATE / BEEP_FREQ)
+			phase = 0;
+	}
+	
+	SDL_PutAudioStreamData(audio_stream, buffer, sizeof(buffer));
+}
+*/
+void audioCallback(
+    void *userdata,
+    SDL_AudioStream *stream,
+    int additional_amount,
+    int total_amount
+)
+{
+    static double phase = 0.0;
+
+    int samples = additional_amount / sizeof(float);
+
+    float *buffer = malloc(samples * sizeof(float));
+
+    if (!buffer)
+        return;
+
+    for (int i = 0; i < samples; i++) {
+
+        if (chip8.sound_timer > 0) {
+
+            buffer[i] =
+                0.15f * sin(2.0 * M_PI * phase);
+
+            phase += (double)BEEP_FREQ / SAMPLE_RATE;
+
+            if (phase >= 1.0)
+                phase -= 1.0;
+
+        } else {
+
+            buffer[i] = 0.0f;
+        }
+    }
+
+    SDL_PutAudioStreamData(
+        stream,
+        buffer,
+        samples * sizeof(float)
+    );
+
+    free(buffer);
+}
 
 void emulateCycle() {
     chip8.opcode = chip8.memory[chip8.pc] << 8 | chip8.memory[chip8.pc + 1];
+    #ifdef DEBUG
     printf("Opcode: %04X\n", chip8.opcode);
-
+    #endif
     chip8.pc += 2;
 
     switch (chip8.opcode & 0xF000) {
@@ -366,10 +431,26 @@ int main(int argc, char* argv[]) {
     loadRom(argv[1]);
 
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
         return 1;
     }
+
+    SDL_AudioSpec spec = {
+    .freq = SAMPLE_RATE,
+    .format = SDL_AUDIO_F32,
+    .channels = 1
+    };
+
+    audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audioCallback, NULL);
+
+    if (!audio_stream) {
+        SDL_Log("Failed to create audio stream: %s", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+
+    SDL_ResumeAudioStreamDevice(audio_stream);
 
 
     SDL_Window* window = SDL_CreateWindow("CHIP-8 Emulator", SCREEN_WIDTH * SCALE, SCREEN_HEIGHT * SCALE, SDL_WINDOW_OPENGL);
@@ -405,7 +486,9 @@ int main(int argc, char* argv[]) {
 
         if (currentTicks - lastTimerTick >= 16) {
             if (chip8.delay_timer > 0) chip8.delay_timer--;
-            if (chip8.sound_timer > 0) chip8.sound_timer--;
+            if (chip8.sound_timer > 0) {
+                chip8.sound_timer--;
+            }
             lastTimerTick = currentTicks;
         }
 
