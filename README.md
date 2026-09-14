@@ -14,6 +14,7 @@ Fully functional including graphics, input and sound using SDL.
 Clone the repository:
 ```
 git clone https://github.com/ihsanfz/chip8-emu.git
+cd chip8-emu
 ```
 
 Build the project:
